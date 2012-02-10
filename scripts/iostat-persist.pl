@@ -15,6 +15,7 @@
 #
 # CHANGES
 # -------
+# 10/Feb/2012 - Nate Carlson - add functionality to replace device names
 # 14/10/2010 - Version 1.6 - Added iostat-persist.pl by "asq"
 # 14/10/2008 - Version 1.0 - Initial release, Linux iostat only. Solaris etc.
 #                            coming in next revision!
@@ -45,6 +46,7 @@ use strict;
 use constant debug => 0;
 my $base_oid = ".1.3.6.1.3.1";
 my $iostat_cache = "/tmp/iostat.cache";
+my $iostat_mapping_cache = "/tmp/iostat-mapping.cache";
 my $req;
 my %stats;
 my $devices;
@@ -52,7 +54,7 @@ my $mibtime;
 
 # Results from iostat are cached for some seconds so that an
 # SNMP walk doesn't result in collecting data over and over again:
-my $cache_secs = 60;
+my $cache_secs = 30;
 
 # Switch on autoflush
 $| = 1;
@@ -100,6 +102,28 @@ sub process {
     open( IOSTAT, $iostat_cache )
       or return ("Could not open iostat cache $iostat_cache : $!");
 
+    ## support a "mapping cache", which can be used to replace the device
+    ## name in the snmp output with <something else>. I am using it to
+    ## replace generic 'dm-X' names with the multipath or lvm disk name.
+    ## 2012-02-10, Nate Carlson
+    
+    # open the mapping file, and import it into a hash
+    my %devmapping;
+
+    eval { 
+      open ( IOSTATMAPPING, "< $iostat_mapping_cache" );
+    } or do {
+      print "WARN: Could not open iostat mapping cache $iostat_mapping_cache : $!\n" if (debug);
+    };
+    
+    while (my $line = <IOSTATMAPPING> ) {
+        chomp($line);
+        my($origname,$replname) = split(/,/, $line);
+        $devmapping{$origname} = $replname;
+    }
+    close(IOSTATMAPPING);
+
+    # ..back to the normal processing.
     my $header_seen = 0;
 
     while (<IOSTAT>) {
@@ -113,8 +137,15 @@ sub process {
         if ($ostype eq 'linux') { 
            /^([a-z0-9\-\/]+)\s+(\d+[\.,]\d+)\s+(\d+[\.,]\d+)\s+(\d+[\.,]\d+)\s+(\d+[\.,]\d+)\s+(\d+[\.,]\d+)\s+(\d+[\.,]\d+)\s+(\d+[\.,]\d+)\s+(\d+[\.,]\d+)\s+(\d+[\.,]\d+)\s+(\d+[\.,]\d+)\s+(\d+[\.,]\d+)/;
 
+           my($devicename) = $1;
+
+           # If a replacement value exists for the device name, substitute that..
+           if (exists $devmapping{$1}) {
+             $devicename = $devmapping{$1};
+           }
+
            $stats{"$base_oid.1.$devices"}  = $devices;	# index
-           $stats{"$base_oid.2.$devices"}  = $1;		# device name
+           $stats{"$base_oid.2.$devices"}  = $devicename;  # device name
            $stats{"$base_oid.3.$devices"}  = $2;		# rrqm/s
            $stats{"$base_oid.4.$devices"}  = $3;		# wrqm/s
            $stats{"$base_oid.5.$devices"}  = $4;		# r/s

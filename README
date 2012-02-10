@@ -1,3 +1,28 @@
+---------------------------------
+- MODIFICATIONS BY NATE CARLSON -
+---------------------------------
+
+Minor:
+2012-Feb-10: Fix the snmp_queries scripts by removing 'ioName', as described in
+             comments on the web site.
+
+Not-quite-as-minor:
+
+** 2012-Feb-10: Device name mapping **
+Added functionality (on Linux) to create a 'device name mapping' file, which
+can be used to replace the device name that is sent with a name of your choice.
+I am using this to replace generic 'dm-X' devices with what they actually are;
+see scripts/generate-dm-mapping for details. I run this in a cronjob every minute,
+as on some of my Oracle RAC nodes the devices change on a regular basis.
+
+
+
+
+
+The rest of the file below is the original version from:
+https://github.com/markround/Cacti-iostat-templates
+
+
 OVERVIEW
 --------
 This is a collection of scripts and Cacti templates to graph the output from
